@@ -1,13 +1,14 @@
 import React from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useGetProductsQuery } from '../store/api/productApi';
 import { selectIsAuthenticated, selectCurrentUser } from '../store/slices/authSlice';
-import { selectTotalItems } from '../store/slices/cartSlice';
+import { selectTotalItems, addToCart } from '../store/slices/cartSlice';
 import ProductCard from './ProductCard';
 import cart from '../assets/cart.png';
 
 const Home = () => {
+  const dispatch = useDispatch();
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user = useSelector(selectCurrentUser);
   const totalCartItems = useSelector(selectTotalItems);
@@ -15,7 +16,7 @@ const Home = () => {
   
   const { data: productsResponse, error, isLoading } = useGetProductsQuery();
 
-  // Extract products array from response - handle both array and object responses
+  // Extract products array from response
   const products = Array.isArray(productsResponse) 
     ? productsResponse 
     : productsResponse?.data || productsResponse?.products || [];
@@ -27,6 +28,74 @@ const Home = () => {
     white: '#FFFFFF',
     lightGray: '#f8f9fa',
     dark: '#2d3748'
+  };
+
+  // Function to render star ratings
+  const renderStarRating = (rating) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    
+    // Full stars
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(<span key={`full-${i}`} style={{ color: '#FFD700' }}>★</span>);
+    }
+    
+    // Empty stars
+    const emptyStars = 5 - stars.length;
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(<span key={`empty-${i}`} style={{ color: '#E0E0E0' }}>★</span>);
+    }
+    
+    return stars;
+  };
+
+  // Handle Add to Cart
+  const handleAddToCart = (product, e) => {
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    const cartItem = {
+      id: product.id,
+      name: product.name,
+      price: product.offerPrice || product.originalPrice,
+      originalPrice: product.originalPrice,
+      image: product.images?.[0] || '',
+      quantity: 1,
+      stock: product.stock
+    };
+    
+    dispatch(addToCart(cartItem));
+    
+    // Show success feedback (you can add a toast notification here)
+    console.log('Added to cart:', product.name);
+  };
+
+  // Handle Buy Now
+  const handleBuyNow = (product, e) => {
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    // Add to cart first
+    const cartItem = {
+      id: product.id,
+      name: product.name,
+      price: product.offerPrice || product.originalPrice,
+      originalPrice: product.originalPrice,
+      image: product.images?.[0] || '',
+      quantity: 1,
+      stock: product.stock
+    };
+    
+    dispatch(addToCart(cartItem));
+    
+    // Navigate to checkout
+    navigate('/checkout');
   };
 
   return (
@@ -120,7 +189,7 @@ const Home = () => {
                     <small style={{ opacity: 0.8 }}>Customer Rating</small>
                   </div>
                 </div>
-                <div className="">
+                <div className="d-flex align-items-center">
                   <div className="me-2" style={{ fontSize: '1.5rem' }}>🚚</div>
                   <div>
                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Free</div>
@@ -156,27 +225,27 @@ const Home = () => {
                     boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
                   }}
                 >
-                 <div 
-  style={{ 
-    width: '200px',
-    height: '200px',
-    transform: 'rotate(-10deg)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  }}
->
-  <img 
-    src={cart} 
-    alt="Shopping Cart"
-    style={{
-      width: '100%',
-      height: '100%',
-      objectFit: 'contain',
-      filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.1))'
-    }}
-  />
-</div>
+                  <div 
+                    style={{ 
+                      width: '200px',
+                      height: '200px',
+                      transform: 'rotate(-10deg)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <img 
+                      src={cart} 
+                      alt="Shopping Cart"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.1))'
+                      }}
+                    />
+                  </div>
                   <div 
                     className="position-absolute rounded-circle d-flex align-items-center justify-content-center"
                     style={{
@@ -387,7 +456,211 @@ const Home = () => {
               <div className="row g-4">
                 {products.slice(0, 6).map((product) => (
                   <div key={product.id} className="col-xl-4 col-lg-6">
-                    <ProductCard product={product} />
+                    {/* Custom Product Display with Ratings */}
+                    <div 
+                      className="card h-100 border-0 shadow-sm"
+                      style={{
+                        borderRadius: '15px',
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-5px)';
+                        e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
+                      }}
+                    >
+                      {/* Product Image */}
+                      <div 
+                        style={{
+                          height: '200px',
+                          background: colors.lightGray,
+                          borderRadius: '15px 15px 0 0',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        onClick={() => navigate(`/product/${product.id}`)}
+                      >
+                        {product.images && product.images.length > 0 ? (
+                          <img 
+                            src={product.images[0]} 
+                            alt={product.name}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        ) : (
+                          <div 
+                            className="d-flex align-items-center justify-content-center"
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              background: `linear-gradient(135deg, ${colors.primary}20, ${colors.secondary}20)`,
+                              color: colors.primary,
+                              fontSize: '3rem'
+                            }}
+                          >
+                            📷
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="card-body p-4">
+                        {/* Product Name */}
+                        <h6 className="fw-bold mb-2" style={{ color: colors.dark }}>
+                          {product.name}
+                        </h6>
+
+                        {/* Product Description */}
+                        <p 
+                          className="text-muted small mb-3"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {product.description || 'No description available'}
+                        </p>
+
+                        {/* Rating and Reviews */}
+                        <div className="d-flex align-items-center justify-content-between mb-3">
+                          <div className="d-flex align-items-center">
+                            <div className="me-2" style={{ fontSize: '0.9rem' }}>
+                              {renderStarRating(product.averageRating || 0)}
+                            </div>
+                            <small 
+                              className="fw-semibold"
+                              style={{ color: colors.primary }}
+                            >
+                              {product.averageRating ? product.averageRating.toFixed(1) : '0.0'}
+                            </small>
+                          </div>
+                          <small 
+                            className="text-muted"
+                          >
+                            ({product.reviewCount || 0} reviews)
+                          </small>
+                        </div>
+
+                        {/* Price Section */}
+                        <div className="d-flex align-items-center justify-content-between mb-3">
+                          <div>
+                            <span 
+                              className="fw-bold h5 mb-0"
+                              style={{ color: colors.primary }}
+                            >
+                              ${product.offerPrice || product.originalPrice}
+                            </span>
+                            {product.offerPrice && product.offerPrice < product.originalPrice && (
+                              <small 
+                                className="text-muted text-decoration-line-through ms-2"
+                              >
+                                ${product.originalPrice}
+                              </small>
+                            )}
+                          </div>
+                          
+                          {/* Discount Badge */}
+                          {product.offerPrice && product.offerPrice < product.originalPrice && (
+                            <span 
+                              className="badge"
+                              style={{
+                                background: colors.secondary,
+                                color: colors.white,
+                                fontSize: '0.7rem'
+                              }}
+                            >
+                              {Math.round(((product.originalPrice - product.offerPrice) / product.originalPrice) * 100)}% OFF
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Stock Status */}
+                        <div className="mb-3">
+                          <small 
+                            className={product.stock > 0 ? "text-success" : "text-danger"}
+                          >
+                            {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
+                          </small>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="d-flex gap-2">
+                          <button 
+                            className="btn flex-fill"
+                            style={{
+                              background: colors.primary,
+                              color: colors.white,
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '10px',
+                              fontSize: '0.9rem',
+                              fontWeight: '500',
+                              transition: 'all 0.3s ease',
+                              opacity: product.stock > 0 ? 1 : 0.6
+                            }}
+                            onClick={(e) => handleAddToCart(product, e)}
+                            disabled={product.stock <= 0}
+                            onMouseEnter={(e) => {
+                              if (product.stock > 0) {
+                                e.target.style.background = '#1a237e';
+                                e.target.style.transform = 'translateY(-2px)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (product.stock > 0) {
+                                e.target.style.background = colors.primary;
+                                e.target.style.transform = 'translateY(0)';
+                              }
+                            }}
+                          >
+                            <i className="bi bi-cart-plus me-1"></i>
+                            Add to Cart
+                          </button>
+                          
+                          <button 
+                            className="btn flex-fill"
+                            style={{
+                              background: colors.secondary,
+                              color: colors.white,
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '10px',
+                              fontSize: '0.9rem',
+                              fontWeight: '500',
+                              transition: 'all 0.3s ease',
+                              opacity: product.stock > 0 ? 1 : 0.6
+                            }}
+                            onClick={(e) => handleBuyNow(product, e)}
+                            disabled={product.stock <= 0}
+                            onMouseEnter={(e) => {
+                              if (product.stock > 0) {
+                                e.target.style.background = '#5aa02c';
+                                e.target.style.transform = 'translateY(-2px)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (product.stock > 0) {
+                                e.target.style.background = colors.secondary;
+                                e.target.style.transform = 'translateY(0)';
+                              }
+                            }}
+                          >
+                            <i className="bi bi-lightning me-1"></i>
+                            Buy Now
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

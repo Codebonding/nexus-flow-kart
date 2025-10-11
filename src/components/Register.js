@@ -1,34 +1,60 @@
-// components/Login.js
+// components/Register.js
 import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { setCredentials } from '../store/slices/authSlice';
-import { useLoginMutation } from '../store/api/authApi';
+import { useRegisterMutation } from '../store/api/authApi';
 import Swal from 'sweetalert2';
 
-const Login = () => {
-  const dispatch = useDispatch();
+const Register = () => {
   const navigate = useNavigate();
   
-  const [login, { isLoading }] = useLoginMutation();
+  const [register, { isLoading }] = useRegisterMutation();
   
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
-    password: ''
+    phone: '',
+    gender: '',
+    password: '',
+    confirmPassword: ''
   });
   
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    
+    // For phone field, only allow numbers and limit to 10 digits
+    if (name === 'phone') {
+      const numbersOnly = value.replace(/\D/g, '');
+      if (numbersOnly.length <= 10) {
+        setFormData({
+          ...formData,
+          [name]: numbersOnly
+        });
+      }
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
+    
     if (error) setError('');
   };
 
   const validateForm = () => {
+    if (!formData.username.trim()) {
+      setError('Username is required');
+      return false;
+    }
+    
+    if (formData.username.length < 3) {
+      setError('Username must be at least 3 characters');
+      return false;
+    }
+    
     if (!formData.email.trim()) {
       setError('Email is required');
       return false;
@@ -39,8 +65,33 @@ const Login = () => {
       return false;
     }
     
+    if (!formData.phone.trim()) {
+      setError('Phone number is required');
+      return false;
+    }
+    
+    if (!/^\d{10}$/.test(formData.phone)) {
+      setError('Please enter a valid 10-digit phone number');
+      return false;
+    }
+    
+    if (!formData.gender) {
+      setError('Please select your gender');
+      return false;
+    }
+    
     if (!formData.password) {
       setError('Password is required');
+      return false;
+    }
+    
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return false;
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
       return false;
     }
     
@@ -53,76 +104,45 @@ const Login = () => {
     if (!validateForm()) return;
 
     try {
-      const result = await login({
+      const result = await register({
+        username: formData.username,
         email: formData.email,
-        password: formData.password
+        phone: formData.phone,
+        gender: formData.gender,
+        password: formData.password,
+        role: 'customer'
       }).unwrap();
 
-      console.log('Login response:', result);
+      console.log('Registration response:', result);
 
       if (result.success) {
-        // Dispatch credentials to Redux store
-        dispatch(setCredentials({
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken
-        }));
-
         // Show success alert
         await Swal.fire({
-          title: 'Welcome Back!',
-          text: `Successfully logged in as ${result.user.username}`,
+          title: 'Success!',
+          text: 'User registered successfully! Please check your email for OTP verification.',
           icon: 'success',
           confirmButtonColor: '#6FBC2E',
-          confirmButtonText: 'Continue Shopping',
+          confirmButtonText: 'Verify OTP',
           timer: 3000,
           timerProgressBar: true,
         });
 
-        // Redirect to home page
-        navigate('/', { 
-          replace: true
+        // Redirect to OTP verification page
+        navigate('/verify-otp', { 
+          state: { email: formData.email },
+          replace: true 
         });
       }
     } catch (error) {
-      console.error('Login error details:', error);
+      console.error('Registration error details:', error);
       if (error.data) {
-        setError(error.data.message || 'Login failed');
+        setError(error.data.message || 'Registration failed');
       } else if (error.error) {
         setError(error.error);
       } else {
-        setError('Login failed. Please check your credentials and try again.');
+        setError('Registration failed. Please try again.');
       }
     }
-  };
-
-  const handleForgotPassword = () => {
-    Swal.fire({
-      title: 'Forgot Password?',
-      text: 'Enter your email address and we will send you a password reset link.',
-      input: 'email',
-      inputPlaceholder: 'your@email.com',
-      showCancelButton: true,
-      confirmButtonColor: '#1A237E',
-      cancelButtonColor: '#6FBC2E',
-      confirmButtonText: 'Send Reset Link',
-      preConfirm: (email) => {
-        if (!email) {
-          Swal.showValidationMessage('Please enter your email address');
-        } else if (!/\S+@\S+\.\S+/.test(email)) {
-          Swal.showValidationMessage('Please enter a valid email address');
-        }
-      }
-    }).then((result) => {
-      if (result.isConfirmed) {
-        Swal.fire({
-          title: 'Check Your Email!',
-          text: 'If an account exists with this email, you will receive a password reset link shortly.',
-          icon: 'info',
-          confirmButtonColor: '#6FBC2E'
-        });
-      }
-    });
   };
 
   return (
@@ -145,7 +165,7 @@ const Login = () => {
               </Link>
             </div>
 
-            {/* Login Card */}
+            {/* Register Card */}
             <div className="card shadow-lg border-0 rounded-3 overflow-hidden">
               {/* Gradient Header */}
               <div 
@@ -162,11 +182,11 @@ const Login = () => {
                       backdropFilter: 'blur(10px)'
                     }}
                   >
-                    <i className="bi bi-box-arrow-in-right fs-5"></i>
+                    <i className="bi bi-person-plus-fill fs-5"></i>
                   </div>
                 </div>
-                <h3 className="fw-bold mb-1">Welcome Back</h3>
-                <p className="mb-0 opacity-75">Sign in to your ShopEasy account</p>
+                <h3 className="fw-bold mb-1">Join ShopEasy</h3>
+                <p className="mb-0 opacity-75">Create your account in seconds</p>
               </div>
 
               <div className="card-body p-4 p-md-5">
@@ -180,9 +200,31 @@ const Login = () => {
                   </div>
                 )}
 
-                {/* Login Form */}
+                {/* Register Form */}
                 <form onSubmit={handleSubmit} className="needs-validation" noValidate>
                   <div className="row g-3">
+                    {/* Username */}
+                    <div className="col-12">
+                      <label htmlFor="username" className="form-label fw-semibold small text-uppercase text-muted">
+                        Username
+                      </label>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-light border-end-0">
+                          <i className="bi bi-person text-muted"></i>
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control border-start-0 ps-0"
+                          id="username"
+                          name="username"
+                          placeholder="Choose a username"
+                          value={formData.username}
+                          onChange={handleInputChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
                     {/* Email */}
                     <div className="col-12">
                       <label htmlFor="email" className="form-label fw-semibold small text-uppercase text-muted">
@@ -205,25 +247,69 @@ const Login = () => {
                       </div>
                     </div>
 
-                    {/* Password */}
+                    {/* Phone Number */}
                     <div className="col-12">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <label htmlFor="password" className="form-label fw-semibold small text-uppercase text-muted mb-0">
-                          Password
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 text-decoration-none"
-                          onClick={handleForgotPassword}
+                      <label htmlFor="phone" className="form-label fw-semibold small text-uppercase text-muted">
+                        Phone Number
+                      </label>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-light border-end-0">
+                          <i className="bi bi-phone text-muted"></i>
+                        </span>
+                        <input
+                          type="tel"
+                          className="form-control border-start-0 ps-0"
+                          id="phone"
+                          name="phone"
+                          placeholder="9876543210"
+                          value={formData.phone}
+                          onChange={handleInputChange}
+                          maxLength="10"
+                          required
+                        />
+                      </div>
+                      <div className="form-text text-end">
+                        <small>10-digit mobile number</small>
+                      </div>
+                    </div>
+
+                    {/* Gender */}
+                    <div className="col-12">
+                      <label htmlFor="gender" className="form-label fw-semibold small text-uppercase text-muted">
+                        Gender
+                      </label>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-light border-end-0">
+                          <i className="bi bi-gender-ambiguous text-muted"></i>
+                        </span>
+                        <select
+                          className="form-select border-start-0 ps-0"
+                          id="gender"
+                          name="gender"
+                          value={formData.gender}
+                          onChange={handleInputChange}
+                          required
                           style={{ 
-                            color: '#6FBC2E',
-                            fontSize: '0.8rem',
-                            fontWeight: '500'
+                            appearance: 'none',
+                            backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                            backgroundPosition: 'right 0.75rem center',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: '16px 12px'
                           }}
                         >
-                          Forgot Password?
-                        </button>
+                          <option value="">Select your gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
                       </div>
+                    </div>
+
+                    {/* Password */}
+                    <div className="col-12">
+                      <label htmlFor="password" className="form-label fw-semibold small text-uppercase text-muted">
+                        Password
+                      </label>
                       <div className="input-group input-group-lg">
                         <span className="input-group-text bg-light border-end-0">
                           <i className="bi bi-lock text-muted"></i>
@@ -233,7 +319,7 @@ const Login = () => {
                           className="form-control border-start-0 ps-0"
                           id="password"
                           name="password"
-                          placeholder="Enter your password"
+                          placeholder="Create a password"
                           value={formData.password}
                           onChange={handleInputChange}
                           required
@@ -247,26 +333,38 @@ const Login = () => {
                           <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'} text-muted`}></i>
                         </button>
                       </div>
+                      <div className="form-text text-end">
+                        <small>Min. 6 characters</small>
+                      </div>
                     </div>
 
-                    {/* Remember Me Checkbox */}
+                    {/* Confirm Password */}
                     <div className="col-12">
-                      <div className="form-check">
+                      <label htmlFor="confirmPassword" className="form-label fw-semibold small text-uppercase text-muted">
+                        Confirm Password
+                      </label>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-light border-end-0">
+                          <i className="bi bi-lock-fill text-muted"></i>
+                        </span>
                         <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="rememberMe"
-                          style={{ 
-                            backgroundColor: '#1A237E',
-                            borderColor: '#1A237E'
-                          }}
+                          type={showConfirmPassword ? "text" : "password"}
+                          className="form-control border-start-0 ps-0"
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          placeholder="Confirm your password"
+                          value={formData.confirmPassword}
+                          onChange={handleInputChange}
+                          required
                         />
-                        <label 
-                          className="form-check-label text-muted small" 
-                          htmlFor="rememberMe"
+                        <button
+                          type="button"
+                          className="btn bg-light border-start-0"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          style={{ borderColor: '#e0e0e0' }}
                         >
-                          Remember me for 30 days
-                        </label>
+                          <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'} text-muted`}></i>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -300,12 +398,12 @@ const Login = () => {
                       {isLoading ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                          Signing In...
+                          Creating Account...
                         </>
                       ) : (
                         <>
-                          <i className="bi bi-box-arrow-in-right me-2"></i>
-                          Sign In
+                          <i className="bi bi-person-plus me-2"></i>
+                          Create Account
                         </>
                       )}
                     </button>
@@ -349,13 +447,13 @@ const Login = () => {
                   </div>
                 </div>
 
-                {/* Register Link */}
+                {/* Login Link */}
                 <div className="text-center">
                   <p className="mb-2 text-muted" style={{fontFamily: 'system-ui, -apple-system, sans-serif'}}>
-                    Don't have an account?
+                    Already have an account?
                   </p>
                   <Link 
-                    to="/register" 
+                    to="/login" 
                     className="btn btn-outline-primary rounded-2 px-4"
                     style={{ 
                       borderColor: '#6FBC2E',
@@ -363,15 +461,15 @@ const Login = () => {
                       fontFamily: 'system-ui, -apple-system, sans-serif'
                     }}
                   >
-                    <i className="bi bi-person-plus me-2"></i>
-                    Create Account
+                    <i className="bi bi-box-arrow-in-right me-2"></i>
+                    Sign In
                   </Link>
                 </div>
 
                 {/* Terms */}
                 <div className="text-center mt-4 pt-3 border-top">
                   <small className="text-muted">
-                    By signing in, you agree to our{' '}
+                    By creating an account, you agree to our{' '}
                     <a href="/terms" className="text-decoration-none" style={{ color: '#1A237E' }}>
                       Terms of Service
                     </a>{' '}
@@ -387,10 +485,10 @@ const Login = () => {
             {/* Features */}
             <div className="row mt-4 g-3 text-center">
               {[
-                { icon: 'bi-shield-check', text: 'Secure Login' },
-                { icon: 'bi-clock', text: '24/7 Support' },
-                { icon: 'bi-phone', text: 'Mobile Friendly' },
-                { icon: 'bi-graph-up', text: 'Order Tracking' }
+                { icon: 'bi-truck', text: 'Free Shipping' },
+                { icon: 'bi-shield-check', text: 'Secure Payment' },
+                { icon: 'bi-arrow-left-right', text: 'Easy Returns' },
+                { icon: 'bi-award', text: 'Quality Guarantee' }
               ].map((feature, index) => (
                 <div key={index} className="col-6 col-md-3">
                   <div className="d-flex flex-column align-items-center">
@@ -417,4 +515,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Register;

@@ -324,7 +324,7 @@ const Navigation = () => {
             </div>
           </form>
 
-          {/* User Actions */}
+          {/* User Actions - UPDATED SECTION */}
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -453,6 +453,19 @@ const Navigation = () => {
                       zIndex: 1000,
                       marginTop: '8px'
                     }}>
+                      {/* User Info Header */}
+                      <div className="px-3 py-2 border-bottom">
+                        <div className="fw-bold small">{user?.username}</div>
+                        <div className="text-muted small">{user?.email}</div>
+                        <div className="badge bg-primary mt-1" style={{ 
+                          backgroundColor: user?.role === 'admin' ? '#dc3545' : 
+                                         user?.role === 'seller' ? '#198754' : '#0d6efd',
+                          fontSize: '0.7rem'
+                        }}>
+                          {user?.role?.toUpperCase()}
+                        </div>
+                      </div>
+                      
                       <Link 
                         to="/profile"
                         onClick={handleNavLinkClick}
@@ -477,6 +490,7 @@ const Navigation = () => {
                         <i className="bi bi-person" style={{ marginRight: '8px' }}></i>
                         Profile
                       </Link>
+                      
                       <Link 
                         to="/dashboard"
                         onClick={handleNavLinkClick}
@@ -501,11 +515,38 @@ const Navigation = () => {
                         <i className="bi bi-speedometer2" style={{ marginRight: '8px' }}></i>
                         Dashboard
                       </Link>
+                      
+                      <Link 
+                        to="/orders"
+                        onClick={handleNavLinkClick}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '12px 16px',
+                          borderRadius: '8px',
+                          color: '#374151',
+                          textDecoration: 'none',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = '#f0f4ff';
+                          e.target.style.color = '#26309F';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = 'transparent';
+                          e.target.style.color = '#374151';
+                        }}
+                      >
+                        <i className="bi bi-bag-check" style={{ marginRight: '8px' }}></i>
+                        Orders
+                      </Link>
+                      
                       <div style={{ 
                         height: '1px', 
                         backgroundColor: '#e2e8f0', 
                         margin: '8px 0' 
                       }}></div>
+                      
                       <button 
                         onClick={handleLogout}
                         style={{
@@ -763,7 +804,7 @@ const Navigation = () => {
               </div>
             </form>
 
-            {/* Mobile User Actions */}
+            {/* Mobile User Actions - UPDATED */}
             {isAuthenticated ? (
               <div style={{ 
                 display: 'flex', 
@@ -771,6 +812,19 @@ const Navigation = () => {
                 gap: '12px',
                 width: '100%'
               }}>
+                {/* User Info in Mobile Menu */}
+                <div className="px-3 py-2 border rounded" style={{ backgroundColor: '#f8f9fa' }}>
+                  <div className="fw-bold">{user?.username}</div>
+                  <div className="text-muted small">{user?.email}</div>
+                  <div className="badge bg-primary mt-1" style={{ 
+                    backgroundColor: user?.role === 'admin' ? '#dc3545' : 
+                                   user?.role === 'seller' ? '#198754' : '#0d6efd',
+                    fontSize: '0.7rem'
+                  }}>
+                    {user?.role?.toUpperCase()}
+                  </div>
+                </div>
+                
                 <Link 
                   to="/cart"
                   onClick={handleNavLinkClick}
@@ -805,6 +859,24 @@ const Navigation = () => {
                 >
                   <i className="bi bi-person" style={{ marginRight: '12px' }}></i>
                   Profile
+                </Link>
+
+                <Link 
+                  to="/orders"
+                  onClick={handleNavLinkClick}
+                  style={{
+                    padding: '16px 20px',
+                    borderRadius: '10px',
+                    color: '#64748b',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: '#f8fafc',
+                    fontSize: '18px'
+                  }}
+                >
+                  <i className="bi bi-bag-check" style={{ marginRight: '12px' }}></i>
+                  Orders
                 </Link>
 
                 <button 

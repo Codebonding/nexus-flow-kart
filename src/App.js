@@ -1,3 +1,4 @@
+// App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
@@ -5,15 +6,19 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import Home from './components/Home';
 import Login from './components/Login';
+import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import Products from './components/Products';
 import ProductDetail from './components/ProductDetail';
 import Cart from './components/Cart';
+import Checkout from './components/Checkout';
+import Orders from './components/Orders';
 
 // Route Components
 import PrivateRoute from './PrivateRoute/PrivateRoute';
 import PublicRoute from './PublicRoute/PublicRoute';
+import VerifyOtp from './components/VerifyOtp';
 
 function App() {
   return (
@@ -23,10 +28,24 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Home />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/product/:id" element={<ProductDetail />} />
           
           <Route path="/login" element={
             <PublicRoute>
               <Login />
+            </PublicRoute>
+          } />
+          
+          <Route path="/register" element={
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          } />
+
+          <Route path="/verify-otp" element={
+            <PublicRoute>
+              <VerifyOtp />
             </PublicRoute>
           } />
 
@@ -43,21 +62,17 @@ function App() {
             </PrivateRoute>
           } />
 
-          <Route path="/products" element={
+          <Route path="/cart" element={<Cart />} />
+          
+          <Route path="/checkout" element={
             <PrivateRoute>
-              <Products />
+              <Checkout />
             </PrivateRoute>
           } />
 
-          <Route path="/product/:id" element={
+          <Route path="/orders" element={
             <PrivateRoute>
-              <ProductDetail />
-            </PrivateRoute>
-          } />
-
-          <Route path="/cart" element={
-            <PrivateRoute>
-              <Cart />
+              <Orders />
             </PrivateRoute>
           } />
 

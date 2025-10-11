@@ -1,30 +1,41 @@
-// components/Login.js
-import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
-import { setCredentials } from '../store/slices/authSlice';
-import { useLoginMutation } from '../store/api/authApi';
+// components/VerifyOtp.js
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useVerifyOtpMutation, useRegisterMutation } from '../store/api/authApi';
 import Swal from 'sweetalert2';
 
-const Login = () => {
-  const dispatch = useDispatch();
+const VerifyOtp = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   
-  const [login, { isLoading }] = useLoginMutation();
+  const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
+  const [resendOtp, { isLoading: isResending }] = useRegisterMutation(); // Using register to resend OTP
   
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: location.state?.email || '',
+    otp: ''
   });
   
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [countdown, setCountdown] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0 && !canResend) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    } else if (countdown === 0 && !canResend) {
+      setCanResend(true);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown, canResend]);
 
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     if (error) setError('');
   };
 
@@ -39,8 +50,13 @@ const Login = () => {
       return false;
     }
     
-    if (!formData.password) {
-      setError('Password is required');
+    if (!formData.otp.trim()) {
+      setError('OTP is required');
+      return false;
+    }
+    
+    if (formData.otp.length !== 6) {
+      setError('OTP must be 6 digits');
       return false;
     }
     
@@ -53,76 +69,68 @@ const Login = () => {
     if (!validateForm()) return;
 
     try {
-      const result = await login({
-        email: formData.email,
-        password: formData.password
-      }).unwrap();
-
-      console.log('Login response:', result);
+      const result = await verifyOtp(formData).unwrap();
 
       if (result.success) {
-        // Dispatch credentials to Redux store
-        dispatch(setCredentials({
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken
-        }));
-
-        // Show success alert
         await Swal.fire({
-          title: 'Welcome Back!',
-          text: `Successfully logged in as ${result.user.username}`,
+          title: 'Success!',
+          text: result.message || 'OTP verified successfully!',
           icon: 'success',
           confirmButtonColor: '#6FBC2E',
-          confirmButtonText: 'Continue Shopping',
-          timer: 3000,
-          timerProgressBar: true,
+          confirmButtonText: 'Continue to Login'
         });
 
-        // Redirect to home page
-        navigate('/', { 
-          replace: true
-        });
+        navigate('/login', { replace: true });
       }
     } catch (error) {
-      console.error('Login error details:', error);
+      console.error('OTP verification error:', error);
       if (error.data) {
-        setError(error.data.message || 'Login failed');
-      } else if (error.error) {
-        setError(error.error);
+        setError(error.data.message || 'OTP verification failed');
       } else {
-        setError('Login failed. Please check your credentials and try again.');
+        setError('OTP verification failed. Please try again.');
       }
     }
   };
 
-  const handleForgotPassword = () => {
-    Swal.fire({
-      title: 'Forgot Password?',
-      text: 'Enter your email address and we will send you a password reset link.',
-      input: 'email',
-      inputPlaceholder: 'your@email.com',
-      showCancelButton: true,
-      confirmButtonColor: '#1A237E',
-      cancelButtonColor: '#6FBC2E',
-      confirmButtonText: 'Send Reset Link',
-      preConfirm: (email) => {
-        if (!email) {
-          Swal.showValidationMessage('Please enter your email address');
-        } else if (!/\S+@\S+\.\S+/.test(email)) {
-          Swal.showValidationMessage('Please enter a valid email address');
-        }
-      }
-    }).then((result) => {
-      if (result.isConfirmed) {
-        Swal.fire({
-          title: 'Check Your Email!',
-          text: 'If an account exists with this email, you will receive a password reset link shortly.',
-          icon: 'info',
-          confirmButtonColor: '#6FBC2E'
+  const handleResendOtp = async () => {
+    if (!canResend || isResending) return;
+
+    try {
+      // Resend OTP by calling register API again with the same email
+      const result = await resendOtp({
+        username: 'temp', // Temporary username since API requires it
+        email: formData.email,
+        password: 'temp123', // Temporary password since API requires it
+        phone: '0000000000', // Temporary phone since API requires it
+        role: 'customer'
+      }).unwrap();
+
+      if (result.success) {
+        await Swal.fire({
+          title: 'OTP Sent!',
+          text: 'A new OTP has been sent to your email address.',
+          icon: 'success',
+          confirmButtonColor: '#6FBC2E',
+          timer: 3000,
+          timerProgressBar: true,
         });
+
+        // Reset countdown
+        setCountdown(60);
+        setCanResend(false);
+        
+        // Clear any previous errors
+        setError('');
       }
-    });
+    } catch (error) {
+      console.error('Resend OTP error:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to resend OTP. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#6FBC2E'
+      });
+    }
   };
 
   return (
@@ -145,7 +153,7 @@ const Login = () => {
               </Link>
             </div>
 
-            {/* Login Card */}
+            {/* OTP Verification Card */}
             <div className="card shadow-lg border-0 rounded-3 overflow-hidden">
               {/* Gradient Header */}
               <div 
@@ -162,11 +170,11 @@ const Login = () => {
                       backdropFilter: 'blur(10px)'
                     }}
                   >
-                    <i className="bi bi-box-arrow-in-right fs-5"></i>
+                    <i className="bi bi-shield-check fs-5"></i>
                   </div>
                 </div>
-                <h3 className="fw-bold mb-1">Welcome Back</h3>
-                <p className="mb-0 opacity-75">Sign in to your ShopEasy account</p>
+                <h3 className="fw-bold mb-1">Verify OTP</h3>
+                <p className="mb-0 opacity-75">Enter the code sent to your email</p>
               </div>
 
               <div className="card-body p-4 p-md-5">
@@ -180,7 +188,7 @@ const Login = () => {
                   </div>
                 )}
 
-                {/* Login Form */}
+                {/* OTP Form */}
                 <form onSubmit={handleSubmit} className="needs-validation" noValidate>
                   <div className="row g-3">
                     {/* Email */}
@@ -205,70 +213,62 @@ const Login = () => {
                       </div>
                     </div>
 
-                    {/* Password */}
+                    {/* OTP */}
                     <div className="col-12">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <label htmlFor="password" className="form-label fw-semibold small text-uppercase text-muted mb-0">
-                          Password
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 text-decoration-none"
-                          onClick={handleForgotPassword}
-                          style={{ 
-                            color: '#6FBC2E',
-                            fontSize: '0.8rem',
-                            fontWeight: '500'
-                          }}
-                        >
-                          Forgot Password?
-                        </button>
-                      </div>
+                      <label htmlFor="otp" className="form-label fw-semibold small text-uppercase text-muted">
+                        OTP Code
+                      </label>
                       <div className="input-group input-group-lg">
                         <span className="input-group-text bg-light border-end-0">
-                          <i className="bi bi-lock text-muted"></i>
+                          <i className="bi bi-key text-muted"></i>
                         </span>
                         <input
-                          type={showPassword ? "text" : "password"}
-                          className="form-control border-start-0 ps-0"
-                          id="password"
-                          name="password"
-                          placeholder="Enter your password"
-                          value={formData.password}
+                          type="text"
+                          className="form-control border-start-0 ps-0 text-center"
+                          id="otp"
+                          name="otp"
+                          value={formData.otp}
                           onChange={handleInputChange}
+                          placeholder="Enter 6-digit OTP"
+                          maxLength="6"
                           required
+                          style={{ letterSpacing: '0.5em', fontWeight: '600' }}
                         />
-                        <button
-                          type="button"
-                          className="btn bg-light border-start-0"
-                          onClick={() => setShowPassword(!showPassword)}
-                          style={{ borderColor: '#e0e0e0' }}
-                        >
-                          <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'} text-muted`}></i>
-                        </button>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Remember Me Checkbox */}
-                    <div className="col-12">
-                      <div className="form-check">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="rememberMe"
-                          style={{ 
-                            backgroundColor: '#1A237E',
-                            borderColor: '#1A237E'
-                          }}
-                        />
-                        <label 
-                          className="form-check-label text-muted small" 
-                          htmlFor="rememberMe"
-                        >
-                          Remember me for 30 days
-                        </label>
-                      </div>
-                    </div>
+                  {/* Resend OTP Section */}
+                  <div className="text-center mt-4">
+                    {canResend ? (
+                      <button
+                        type="button"
+                        className="btn btn-link text-decoration-none p-0 fw-medium"
+                        onClick={handleResendOtp}
+                        disabled={isResending}
+                        style={{ 
+                          color: '#6FBC2E',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        {isResending ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-arrow-clockwise me-2"></i>
+                            Resend OTP
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <small className="text-muted">
+                        <i className="bi bi-clock me-1"></i>
+                        Resend OTP in {countdown} seconds
+                      </small>
+                    )}
                   </div>
 
                   {/* Submit Button */}
@@ -276,7 +276,7 @@ const Login = () => {
                     <button 
                       type="submit" 
                       className="btn w-100 py-3 fw-bold rounded-2 border-0"
-                      disabled={isLoading}
+                      disabled={isVerifying}
                       style={{
                         background: 'linear-gradient(135deg, #1A237E 0%, #283593 100%)',
                         color: 'white',
@@ -285,27 +285,27 @@ const Login = () => {
                         fontFamily: 'system-ui, -apple-system, sans-serif'
                       }}
                       onMouseEnter={(e) => {
-                        if (!isLoading) {
+                        if (!isVerifying) {
                           e.target.style.transform = 'translateY(-2px)';
                           e.target.style.boxShadow = '0 8px 25px rgba(26, 35, 126, 0.3)';
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (!isLoading) {
+                        if (!isVerifying) {
                           e.target.style.transform = 'translateY(0)';
                           e.target.style.boxShadow = 'none';
                         }
                       }}
                     >
-                      {isLoading ? (
+                      {isVerifying ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                          Signing In...
+                          Verifying...
                         </>
                       ) : (
                         <>
-                          <i className="bi bi-box-arrow-in-right me-2"></i>
-                          Sign In
+                          <i className="bi bi-shield-check me-2"></i>
+                          Verify OTP
                         </>
                       )}
                     </button>
@@ -321,41 +321,13 @@ const Login = () => {
                   </div>
                 </div>
 
-                {/* Social Login Buttons */}
-                <div className="row g-2 mb-4">
-                  <div className="col-6">
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-secondary w-100 py-2 rounded-2"
-                      style={{ fontSize: '0.9rem' }}
-                    >
-                      <i className="bi bi-google me-2"></i>
-                      Google
-                    </button>
-                  </div>
-                  <div className="col-6">
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-primary w-100 py-2 rounded-2"
-                      style={{ 
-                        fontSize: '0.9rem',
-                        borderColor: '#1877F2',
-                        color: '#1877F2'
-                      }}
-                    >
-                      <i className="bi bi-facebook me-2"></i>
-                      Facebook
-                    </button>
-                  </div>
-                </div>
-
-                {/* Register Link */}
+                {/* Back to Login */}
                 <div className="text-center">
                   <p className="mb-2 text-muted" style={{fontFamily: 'system-ui, -apple-system, sans-serif'}}>
-                    Don't have an account?
+                    Already verified your account?
                   </p>
                   <Link 
-                    to="/register" 
+                    to="/login" 
                     className="btn btn-outline-primary rounded-2 px-4"
                     style={{ 
                       borderColor: '#6FBC2E',
@@ -363,22 +335,27 @@ const Login = () => {
                       fontFamily: 'system-ui, -apple-system, sans-serif'
                     }}
                   >
-                    <i className="bi bi-person-plus me-2"></i>
-                    Create Account
+                    <i className="bi bi-box-arrow-in-right me-2"></i>
+                    Back to Login
                   </Link>
                 </div>
 
-                {/* Terms */}
+                {/* Help Text */}
                 <div className="text-center mt-4 pt-3 border-top">
                   <small className="text-muted">
-                    By signing in, you agree to our{' '}
-                    <a href="/terms" className="text-decoration-none" style={{ color: '#1A237E' }}>
-                      Terms of Service
-                    </a>{' '}
-                    and{' '}
-                    <a href="/privacy" className="text-decoration-none" style={{ color: '#1A237E' }}>
-                      Privacy Policy
-                    </a>
+                    Didn't receive the OTP? Check your spam folder or{' '}
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none"
+                      onClick={handleResendOtp}
+                      disabled={!canResend || isResending}
+                      style={{ 
+                        color: '#1A237E',
+                        fontSize: 'inherit'
+                      }}
+                    >
+                      resend
+                    </button>
                   </small>
                 </div>
               </div>
@@ -387,10 +364,10 @@ const Login = () => {
             {/* Features */}
             <div className="row mt-4 g-3 text-center">
               {[
-                { icon: 'bi-shield-check', text: 'Secure Login' },
-                { icon: 'bi-clock', text: '24/7 Support' },
-                { icon: 'bi-phone', text: 'Mobile Friendly' },
-                { icon: 'bi-graph-up', text: 'Order Tracking' }
+                { icon: 'bi-shield-check', text: 'Secure Verification' },
+                { icon: 'bi-clock', text: 'OTP Expires in 10 min' },
+                { icon: 'bi-envelope', text: 'Check Email' },
+                { icon: 'bi-phone', text: 'Mobile Friendly' }
               ].map((feature, index) => (
                 <div key={index} className="col-6 col-md-3">
                   <div className="d-flex flex-column align-items-center">
@@ -417,4 +394,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default VerifyOtp;

@@ -1,16 +1,32 @@
 import { createSlice } from '@reduxjs/toolkit';
 
-// Get initial state from localStorage
+// Get initial state from localStorage safely
 const getInitialState = () => {
-  const storedAuth = localStorage.getItem('auth');
-  if (storedAuth) {
-    try {
-      return JSON.parse(storedAuth);
-    } catch (error) {
-      console.error('Error parsing stored auth data:', error);
-      localStorage.removeItem('auth');
-    }
+  if (typeof window === 'undefined') {
+    return {
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+    };
   }
+
+  try {
+    const storedAuth = localStorage.getItem('auth');
+    if (storedAuth) {
+      const parsedAuth = JSON.parse(storedAuth);
+      return {
+        user: parsedAuth.user || null,
+        accessToken: parsedAuth.accessToken || null,
+        refreshToken: parsedAuth.refreshToken || null,
+        isAuthenticated: !!parsedAuth.accessToken,
+      };
+    }
+  } catch (error) {
+    console.error('Error parsing stored auth data:', error);
+    localStorage.removeItem('auth');
+  }
+
   return {
     user: null,
     accessToken: null,
@@ -30,7 +46,6 @@ const authSlice = createSlice({
       state.refreshToken = refreshToken;
       state.isAuthenticated = true;
       
-      // Save to localStorage
       localStorage.setItem('auth', JSON.stringify(state));
     },
     logout: (state) => {
@@ -38,8 +53,6 @@ const authSlice = createSlice({
       state.accessToken = null;
       state.refreshToken = null;
       state.isAuthenticated = false;
-      
-      // Remove from localStorage
       localStorage.removeItem('auth');
     },
     updateUser: (state, action) => {
