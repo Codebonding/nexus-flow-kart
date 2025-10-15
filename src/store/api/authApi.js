@@ -15,6 +15,7 @@ export const authApi = createApi({
   }),
   tagTypes: ['User'],
   endpoints: (builder) => ({
+    // Registration OTP Flow
     register: builder.mutation({
       query: (userData) => ({
         url: 'register',
@@ -29,6 +30,24 @@ export const authApi = createApi({
         body: otpData,
       }),
     }),
+
+    // Login OTP Flow
+    sendLoginOtp: builder.mutation({
+      query: (credentials) => ({
+        url: 'login/send-otp',
+        method: 'POST',
+        body: credentials,
+      }),
+    }),
+    verifyLoginOtp: builder.mutation({
+      query: (otpData) => ({
+        url: 'login/verify-otp',
+        method: 'POST',
+        body: otpData,
+      }),
+    }),
+
+    // Traditional Login (if needed)
     login: builder.mutation({
       query: (credentials) => ({
         url: 'login',
@@ -36,6 +55,24 @@ export const authApi = createApi({
         body: credentials,
       }),
     }),
+
+    // Forgot Password Flow
+    forgotPassword: builder.mutation({
+      query: (emailOrPhone) => ({
+        url: 'forgot-password',
+        method: 'POST',
+        body: emailOrPhone,
+      }),
+    }),
+    resetPassword: builder.mutation({
+      query: (resetData) => ({
+        url: 'reset-password',
+        method: 'POST',
+        body: resetData,
+      }),
+    }),
+
+    // User Management
     getUser: builder.query({
       query: (userId) => ({
         url: `${userId}`,
@@ -58,6 +95,10 @@ export const {
   useRegisterMutation, 
   useVerifyOtpMutation, 
   useLoginMutation,
+  useSendLoginOtpMutation,
+  useVerifyLoginOtpMutation,
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
   useGetUserQuery,
   useUpdateUserMutation
 } = authApi;

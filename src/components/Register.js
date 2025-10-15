@@ -414,36 +414,7 @@ const Register = () => {
                 <div className="text-center my-4">
                   <div className="d-flex align-items-center">
                     <div style={{ flex: 1, height: '1px', background: '#f0f0f0' }}></div>
-                    <div className="px-3 text-muted small">OR</div>
-                    <div style={{ flex: 1, height: '1px', background: '#f0f0f0' }}></div>
-                  </div>
-                </div>
-
-                {/* Social Login Buttons */}
-                <div className="row g-2 mb-4">
-                  <div className="col-6">
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-secondary w-100 py-2 rounded-2"
-                      style={{ fontSize: '0.9rem' }}
-                    >
-                      <i className="bi bi-google me-2"></i>
-                      Google
-                    </button>
-                  </div>
-                  <div className="col-6">
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-primary w-100 py-2 rounded-2"
-                      style={{ 
-                        fontSize: '0.9rem',
-                        borderColor: '#1877F2',
-                        color: '#1877F2'
-                      }}
-                    >
-                      <i className="bi bi-facebook me-2"></i>
-                      Facebook
-                    </button>
+                    
                   </div>
                 </div>
 

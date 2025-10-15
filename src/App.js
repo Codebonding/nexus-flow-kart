@@ -19,6 +19,10 @@ import Orders from './components/Orders';
 import PrivateRoute from './PrivateRoute/PrivateRoute';
 import PublicRoute from './PublicRoute/PublicRoute';
 import VerifyOtp from './components/VerifyOtp';
+import VerifyLoginOtp from './components/VerifyLoginOtp';
+import ResetPassword from './components/ResetPassword';
+import TermsAndConditions from './components/TermsAndConditions';
+import PrivacyPolicy from './components/PrivacyPolicy';
 
 function App() {
   return (
@@ -46,6 +50,30 @@ function App() {
           <Route path="/verify-otp" element={
             <PublicRoute>
               <VerifyOtp />
+            </PublicRoute>
+          } />
+
+          <Route path="/verify-login-otp" element={
+            <PublicRoute>
+              <VerifyLoginOtp />
+            </PublicRoute>
+          } />
+
+          <Route path="/terms" element={
+            <PublicRoute>
+              <TermsAndConditions />
+            </PublicRoute>
+          } />
+
+          <Route path="/privacy" element={
+            <PublicRoute>
+              <PrivacyPolicy />
+            </PublicRoute>
+          } />
+
+          <Route path="/reset-password" element={
+            <PublicRoute>
+              <ResetPassword />
             </PublicRoute>
           } />
 

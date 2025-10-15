@@ -1,9 +1,9 @@
 // components/Login.js
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { setCredentials } from '../store/slices/authSlice';
-import { useLoginMutation } from '../store/api/authApi';
+import { useLoginMutation, useSendLoginOtpMutation } from '../store/api/authApi';
 import Swal from 'sweetalert2';
 
 const Login = () => {
@@ -11,64 +11,119 @@ const Login = () => {
   const navigate = useNavigate();
   
   const [login, { isLoading }] = useLoginMutation();
+  const [sendLoginOtp, { isLoading: isSendingOtp }] = useSendLoginOtpMutation();
   
-  const [formData, setFormData] = useState({
+  const [loginState, setLoginState] = useState({
     email: '',
-    password: ''
+    password: '',
+    loginMethod: 'password', // 'password' or 'otp'
+    otpIdentifier: '', // For OTP login - can be email or phone
   });
   
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+  // Memoized input handler
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setLoginState(prev => ({
+      ...prev,
+      [name]: value
+    }));
     if (error) setError('');
-  };
+  }, [error]);
 
-  const validateForm = () => {
-    if (!formData.email.trim()) {
+  // Memoized login method handler
+  const handleLoginMethodChange = useCallback((method) => {
+    setLoginState(prev => ({
+      ...prev,
+      loginMethod: method,
+      // Reset fields when switching methods
+      email: method === 'password' ? prev.email : '',
+      password: method === 'password' ? prev.password : '',
+      otpIdentifier: method === 'otp' ? prev.otpIdentifier : ''
+    }));
+    setError('');
+  }, []);
+
+  // Detect identifier type (email or phone)
+  const detectIdentifierType = useCallback((identifier) => {
+    if (!identifier) return null;
+    
+    // Check if it's a phone number (only digits, 10 characters)
+    const cleanedPhone = identifier.replace(/\D/g, '');
+    if (/^\d{10}$/.test(cleanedPhone)) {
+      return 'phone';
+    }
+    
+    // Check if it's an email
+    if (/\S+@\S+\.\S+/.test(identifier)) {
+      return 'email';
+    }
+    
+    return null;
+  }, []);
+
+  // Centralized validation for password login
+  const validatePasswordLogin = useCallback(() => {
+    const { email, password } = loginState;
+
+    if (!email.trim()) {
       setError('Email is required');
       return false;
     }
-    
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+
+    if (!/\S+@\S+\.\S+/.test(email)) {
       setError('Please enter a valid email address');
       return false;
     }
-    
-    if (!formData.password) {
+
+    if (!password) {
       setError('Password is required');
       return false;
     }
-    
-    return true;
-  };
 
-  const handleSubmit = async (e) => {
+    return true;
+  }, [loginState]);
+
+  // Centralized validation for OTP login
+  const validateOtpLogin = useCallback(() => {
+    const { otpIdentifier } = loginState;
+
+    if (!otpIdentifier.trim()) {
+      setError('Email or phone number is required');
+      return false;
+    }
+
+    const identifierType = detectIdentifierType(otpIdentifier);
+    
+    if (!identifierType) {
+      setError('Please enter a valid email address or 10-digit phone number');
+      return false;
+    }
+
+    return true;
+  }, [loginState, detectIdentifierType]);
+
+  // Handle password login
+  const handlePasswordLogin = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validatePasswordLogin()) return;
 
     try {
       const result = await login({
-        email: formData.email,
-        password: formData.password
+        email: loginState.email,
+        password: loginState.password
       }).unwrap();
 
-      console.log('Login response:', result);
-
       if (result.success) {
-        // Dispatch credentials to Redux store
         dispatch(setCredentials({
           user: result.user,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken
         }));
 
-        // Show success alert
         await Swal.fire({
           title: 'Welcome Back!',
           text: `Successfully logged in as ${result.user.username}`,
@@ -79,51 +134,126 @@ const Login = () => {
           timerProgressBar: true,
         });
 
-        // Redirect to home page
-        navigate('/', { 
-          replace: true
-        });
+        navigate('/', { replace: true });
       }
     } catch (error) {
-      console.error('Login error details:', error);
-      if (error.data) {
-        setError(error.data.message || 'Login failed');
-      } else if (error.error) {
-        setError(error.error);
-      } else {
-        setError('Login failed. Please check your credentials and try again.');
-      }
+      console.error('Login error:', error);
+      setError(error.data?.message || error.error || 'Login failed. Please check your credentials.');
     }
   };
 
-  const handleForgotPassword = () => {
-    Swal.fire({
+  // Handle OTP login
+  const handleOtpLogin = async (e) => {
+    e.preventDefault();
+    
+    if (!validateOtpLogin()) return;
+
+    try {
+      const identifierType = detectIdentifierType(loginState.otpIdentifier);
+      const formattedIdentifier = identifierType === 'phone' 
+        ? loginState.otpIdentifier.replace(/\D/g, '')
+        : loginState.otpIdentifier;
+
+      // Send OTP based on detected type
+      const payload = identifierType === 'email' 
+        ? { email: formattedIdentifier }
+        : { phone: formattedIdentifier };
+
+      console.log('Sending OTP with payload:', payload);
+
+      const result = await sendLoginOtp(payload).unwrap();
+
+      if (result.success) {
+        // Navigate directly to OTP verification page with all data
+        navigate('/verify-login-otp', { 
+          state: { 
+            identifier: formattedIdentifier,
+            identifierType: identifierType,
+            action: 'login' // This tells the OTP page it's for login
+          } 
+        });
+        
+        // Don't show success message here - let OTP page handle it
+      }
+    } catch (error) {
+      console.error('Send OTP error:', error);
+      setError(error.data?.message || 'Failed to send OTP. Please try again.');
+    }
+  };
+
+  // Handle form submission based on login method
+  const handleSubmit = useCallback((e) => {
+    loginState.loginMethod === 'password' 
+      ? handlePasswordLogin(e)
+      : handleOtpLogin(e);
+  }, [loginState.loginMethod, handlePasswordLogin, handleOtpLogin]);
+
+  // Forgot password handler (only for password login)
+  const handleForgotPassword = async () => {
+    const { value: identifier } = await Swal.fire({
       title: 'Forgot Password?',
-      text: 'Enter your email address and we will send you a password reset link.',
-      input: 'email',
-      inputPlaceholder: 'your@email.com',
+      text: 'Enter your email or phone number to receive password reset OTP',
+      input: 'text',
+      inputPlaceholder: 'your@email.com or 9876543210',
       showCancelButton: true,
       confirmButtonColor: '#1A237E',
       cancelButtonColor: '#6FBC2E',
-      confirmButtonText: 'Send Reset Link',
-      preConfirm: (email) => {
-        if (!email) {
-          Swal.showValidationMessage('Please enter your email address');
-        } else if (!/\S+@\S+\.\S+/.test(email)) {
-          Swal.showValidationMessage('Please enter a valid email address');
+      confirmButtonText: 'Send OTP',
+      preConfirm: (value) => {
+        if (!value) {
+          Swal.showValidationMessage('Please enter your email or phone number');
+          return false;
         }
-      }
-    }).then((result) => {
-      if (result.isConfirmed) {
-        Swal.fire({
-          title: 'Check Your Email!',
-          text: 'If an account exists with this email, you will receive a password reset link shortly.',
-          icon: 'info',
-          confirmButtonColor: '#6FBC2E'
-        });
+        
+        const identifierType = detectIdentifierType(value);
+        if (!identifierType) {
+          Swal.showValidationMessage('Please enter a valid email address or 10-digit phone number');
+          return false;
+        }
+        
+        return identifierType === 'phone' ? value.replace(/\D/g, '') : value;
       }
     });
+
+    if (identifier) {
+      const identifierType = detectIdentifierType(identifier);
+      const formattedIdentifier = identifierType === 'phone' 
+        ? identifier.replace(/\D/g, '')
+        : identifier;
+
+      await sendForgotPasswordOtp(
+        identifierType === 'email' ? { email: formattedIdentifier } : { phone: formattedIdentifier },
+        identifierType
+      );
+    }
   };
+
+  const sendForgotPasswordOtp = async (payload, type) => {
+    try {
+      const result = await sendLoginOtp(payload).unwrap();
+
+      if (result.success) {
+        // Navigate directly to OTP verification for password reset
+        navigate('/verify-login-otp', { 
+          state: { 
+            identifier: type === 'email' ? payload.email : payload.phone,
+            identifierType: type,
+            action: 'password_reset'
+          } 
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        title: 'Error!',
+        text: error.data?.message || 'Failed to send OTP. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#6FBC2E'
+      });
+    }
+  };
+
+  const { email, password, loginMethod, otpIdentifier } = loginState;
+  const isLoadingState = isLoading || isSendingOtp;
 
   return (
     <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
@@ -170,6 +300,31 @@ const Login = () => {
               </div>
 
               <div className="card-body p-4 p-md-5">
+                {/* Login Method Toggle */}
+                <div className="row g-2 mb-4">
+                  {[
+                    { value: 'password', icon: 'bi-key', label: 'Password' },
+                    { value: 'otp', icon: 'bi-shield-check', label: 'OTP Login' }
+                  ].map((method) => (
+                    <div key={method.value} className="col-6">
+                      <button
+                        type="button"
+                        className={`btn w-100 py-2 rounded-2 ${loginMethod === method.value ? 'btn-primary' : 'btn-outline-primary'}`}
+                        onClick={() => handleLoginMethodChange(method.value)}
+                        style={{
+                          fontSize: '0.9rem',
+                          borderColor: '#1A237E',
+                          backgroundColor: loginMethod === method.value ? '#1A237E' : 'transparent',
+                          color: loginMethod === method.value ? 'white' : '#1A237E'
+                        }}
+                      >
+                        <i className={`${method.icon} me-2`}></i>
+                        {method.label}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
                 {/* Error Message */}
                 {error && (
                   <div className="alert alert-danger d-flex align-items-center rounded-2 border-0 shadow-sm" 
@@ -183,92 +338,125 @@ const Login = () => {
                 {/* Login Form */}
                 <form onSubmit={handleSubmit} className="needs-validation" noValidate>
                   <div className="row g-3">
-                    {/* Email */}
-                    <div className="col-12">
-                      <label htmlFor="email" className="form-label fw-semibold small text-uppercase text-muted">
-                        Email Address
-                      </label>
-                      <div className="input-group input-group-lg">
-                        <span className="input-group-text bg-light border-end-0">
-                          <i className="bi bi-envelope text-muted"></i>
-                        </span>
-                        <input
-                          type="email"
-                          className="form-control border-start-0 ps-0"
-                          id="email"
-                          name="email"
-                          placeholder="your@email.com"
-                          value={formData.email}
-                          onChange={handleInputChange}
-                          required
-                        />
-                      </div>
-                    </div>
+                    
+                    {/* Password Login Fields */}
+                    {loginMethod === 'password' && (
+                      <>
+                        {/* Email Input */}
+                        <div className="col-12">
+                          <label htmlFor="email" className="form-label fw-semibold small text-uppercase text-muted">
+                            Email Address
+                          </label>
+                          <div className="input-group input-group-lg">
+                            <span className="input-group-text bg-light border-end-0">
+                              <i className="bi bi-envelope text-muted"></i>
+                            </span>
+                            <input
+                              type="email"
+                              className="form-control border-start-0 ps-0"
+                              id="email"
+                              name="email"
+                              placeholder="your@email.com"
+                              value={email}
+                              onChange={handleInputChange}
+                              required
+                            />
+                          </div>
+                        </div>
 
-                    {/* Password */}
-                    <div className="col-12">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <label htmlFor="password" className="form-label fw-semibold small text-uppercase text-muted mb-0">
-                          Password
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 text-decoration-none"
-                          onClick={handleForgotPassword}
-                          style={{ 
-                            color: '#6FBC2E',
-                            fontSize: '0.8rem',
-                            fontWeight: '500'
-                          }}
-                        >
-                          Forgot Password?
-                        </button>
-                      </div>
-                      <div className="input-group input-group-lg">
-                        <span className="input-group-text bg-light border-end-0">
-                          <i className="bi bi-lock text-muted"></i>
-                        </span>
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          className="form-control border-start-0 ps-0"
-                          id="password"
-                          name="password"
-                          placeholder="Enter your password"
-                          value={formData.password}
-                          onChange={handleInputChange}
-                          required
-                        />
-                        <button
-                          type="button"
-                          className="btn bg-light border-start-0"
-                          onClick={() => setShowPassword(!showPassword)}
-                          style={{ borderColor: '#e0e0e0' }}
-                        >
-                          <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'} text-muted`}></i>
-                        </button>
-                      </div>
-                    </div>
+                        {/* Password Field */}
+                        <div className="col-12">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <label htmlFor="password" className="form-label fw-semibold small text-uppercase text-muted mb-0">
+                              Password
+                            </label>
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 text-decoration-none"
+                              onClick={handleForgotPassword}
+                              style={{ 
+                                color: '#6FBC2E',
+                                fontSize: '0.8rem',
+                                fontWeight: '500'
+                              }}
+                            >
+                              Forgot Password?
+                            </button>
+                          </div>
+                          <div className="input-group input-group-lg">
+                            <span className="input-group-text bg-light border-end-0">
+                              <i className="bi bi-lock text-muted"></i>
+                            </span>
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              className="form-control border-start-0 ps-0"
+                              id="password"
+                              name="password"
+                              placeholder="Enter your password"
+                              value={password}
+                              onChange={handleInputChange}
+                              required
+                            />
+                            <button
+                              type="button"
+                              className="btn bg-light border-start-0"
+                              onClick={() => setShowPassword(!showPassword)}
+                              style={{ borderColor: '#e0e0e0' }}
+                            >
+                              <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'} text-muted`}></i>
+                            </button>
+                          </div>
+                        </div>
 
-                    {/* Remember Me Checkbox */}
-                    <div className="col-12">
-                      <div className="form-check">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="rememberMe"
-                          style={{ 
-                            backgroundColor: '#1A237E',
-                            borderColor: '#1A237E'
-                          }}
-                        />
-                        <label 
-                          className="form-check-label text-muted small" 
-                          htmlFor="rememberMe"
-                        >
-                          Remember me for 30 days
+                        {/* Remember Me Checkbox */}
+                        <div className="col-12">
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id="rememberMe"
+                              style={{ 
+                                backgroundColor: '#1A237E',
+                                borderColor: '#1A237E'
+                              }}
+                            />
+                            <label 
+                              className="form-check-label text-muted small" 
+                              htmlFor="rememberMe"
+                            >
+                              Remember me for 30 days
+                            </label>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* OTP Login Field */}
+                    {loginMethod === 'otp' && (
+                      <div className="col-12">
+                        <label htmlFor="otpIdentifier" className="form-label fw-semibold small text-uppercase text-muted">
+                          Email or Phone Number
                         </label>
+                        <div className="input-group input-group-lg">
+                          <span className="input-group-text bg-light border-end-0">
+                            <i className="bi bi-person text-muted"></i>
+                          </span>
+                          <input
+                            type="text"
+                            className="form-control border-start-0 ps-0"
+                            id="otpIdentifier"
+                            name="otpIdentifier"
+                            placeholder="your@email.com or 9876543210"
+                            value={otpIdentifier}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                        <small className="text-muted">
+                          Enter your email address or 10-digit phone number to receive OTP
+                        </small>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Submit Button */}
@@ -276,82 +464,44 @@ const Login = () => {
                     <button 
                       type="submit" 
                       className="btn w-100 py-3 fw-bold rounded-2 border-0"
-                      disabled={isLoading}
+                      disabled={isLoadingState}
                       style={{
                         background: 'linear-gradient(135deg, #1A237E 0%, #283593 100%)',
                         color: 'white',
                         fontSize: '1rem',
-                        transition: 'all 0.3s ease',
-                        fontFamily: 'system-ui, -apple-system, sans-serif'
+                        transition: 'all 0.3s ease'
                       }}
                       onMouseEnter={(e) => {
-                        if (!isLoading) {
+                        if (!isLoadingState) {
                           e.target.style.transform = 'translateY(-2px)';
                           e.target.style.boxShadow = '0 8px 25px rgba(26, 35, 126, 0.3)';
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (!isLoading) {
+                        if (!isLoadingState) {
                           e.target.style.transform = 'translateY(0)';
                           e.target.style.boxShadow = 'none';
                         }
                       }}
                     >
-                      {isLoading ? (
+                      {isLoadingState ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                          Signing In...
+                          {loginMethod === 'password' ? 'Signing In...' : 'Sending OTP...'}
                         </>
                       ) : (
                         <>
-                          <i className="bi bi-box-arrow-in-right me-2"></i>
-                          Sign In
+                          <i className={`bi ${loginMethod === 'password' ? 'bi-box-arrow-in-right' : 'bi-shield-check'} me-2`}></i>
+                          {loginMethod === 'password' ? 'Sign In' : 'Send OTP'}
                         </>
                       )}
                     </button>
                   </div>
                 </form>
 
-                {/* Divider */}
-                <div className="text-center my-4">
-                  <div className="d-flex align-items-center">
-                    <div style={{ flex: 1, height: '1px', background: '#f0f0f0' }}></div>
-                    <div className="px-3 text-muted small">OR</div>
-                    <div style={{ flex: 1, height: '1px', background: '#f0f0f0' }}></div>
-                  </div>
-                </div>
-
-                {/* Social Login Buttons */}
-                <div className="row g-2 mb-4">
-                  <div className="col-6">
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-secondary w-100 py-2 rounded-2"
-                      style={{ fontSize: '0.9rem' }}
-                    >
-                      <i className="bi bi-google me-2"></i>
-                      Google
-                    </button>
-                  </div>
-                  <div className="col-6">
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-primary w-100 py-2 rounded-2"
-                      style={{ 
-                        fontSize: '0.9rem',
-                        borderColor: '#1877F2',
-                        color: '#1877F2'
-                      }}
-                    >
-                      <i className="bi bi-facebook me-2"></i>
-                      Facebook
-                    </button>
-                  </div>
-                </div>
-
                 {/* Register Link */}
-                <div className="text-center">
-                  <p className="mb-2 text-muted" style={{fontFamily: 'system-ui, -apple-system, sans-serif'}}>
+                <div className="text-center mt-4 pt-3 border-top">
+                  <p className="mb-2 text-muted">
                     Don't have an account?
                   </p>
                   <Link 
@@ -359,8 +509,7 @@ const Login = () => {
                     className="btn btn-outline-primary rounded-2 px-4"
                     style={{ 
                       borderColor: '#6FBC2E',
-                      color: '#6FBC2E',
-                      fontFamily: 'system-ui, -apple-system, sans-serif'
+                      color: '#6FBC2E'
                     }}
                   >
                     <i className="bi bi-person-plus me-2"></i>
