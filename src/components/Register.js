@@ -115,33 +115,91 @@ const Register = () => {
 
       console.log('Registration response:', result);
 
-      if (result.success) {
-        // Show success alert
-        await Swal.fire({
+      let alertConfig = {
+        icon: 'success',
+        confirmButtonColor: '#6FBC2E',
+        timer: 3000,
+        timerProgressBar: true,
+      };
+
+      // Handle different scenarios based on response
+      if (result.message?.includes('already sent') || result.isNewRegistration === false) {
+        alertConfig = {
+          ...alertConfig,
+          title: 'OTP Already Sent!',
+          text: 'Please check your email for the OTP or wait for it to expire.',
+          confirmButtonText: 'Verify OTP'
+        };
+      } else {
+        alertConfig = {
+          ...alertConfig,
           title: 'Success!',
           text: 'User registered successfully! Please check your email for OTP verification.',
-          icon: 'success',
-          confirmButtonColor: '#6FBC2E',
-          confirmButtonText: 'Verify OTP',
-          timer: 3000,
-          timerProgressBar: true,
-        });
-
-        // Redirect to OTP verification page
-        navigate('/verify-otp', { 
-          state: { email: formData.email },
-          replace: true 
-        });
+          confirmButtonText: 'Verify OTP'
+        };
       }
+
+      await Swal.fire(alertConfig);
+
+      // Redirect to OTP verification page
+      navigate('/verify-otp', { 
+        state: { email: formData.email },
+        replace: true 
+      });
+
     } catch (error) {
       console.error('Registration error details:', error);
+      
+      let errorMessage = 'Registration failed. Please try again.';
+      
       if (error.data) {
-        setError(error.data.message || 'Registration failed');
-      } else if (error.error) {
-        setError(error.error);
-      } else {
-        setError('Registration failed. Please try again.');
+        errorMessage = error.data.message;
+        
+        // Handle specific cases
+        if (errorMessage.includes('OTP already sent')) {
+          Swal.fire({
+            title: 'OTP Already Sent!',
+            text: 'Please check your email for the OTP or wait for it to expire.',
+            icon: 'warning',
+            confirmButtonColor: '#6FBC2E',
+            confirmButtonText: 'Go to Verify OTP',
+            showCancelButton: true,
+            cancelButtonText: 'Try Again Later'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              navigate('/verify-otp', { 
+                state: { email: formData.email },
+                replace: true 
+              });
+            }
+          });
+          return;
+        }
+        
+        if (errorMessage.includes('already registered and verified')) {
+          Swal.fire({
+            title: 'Account Exists!',
+            text: 'An account with this email/phone already exists. Please login.',
+            icon: 'info',
+            confirmButtonColor: '#6FBC2E',
+            confirmButtonText: 'Go to Login',
+            showCancelButton: true,
+            cancelButtonText: 'Try Different Email'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              navigate('/login');
+            }
+          });
+          return;
+        }
+
+        if (errorMessage.includes('Username already taken')) {
+          setError('Username already taken. Please choose a different username.');
+          return;
+        }
       }
+      
+      setError(errorMessage);
     }
   };
 

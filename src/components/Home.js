@@ -1,20 +1,20 @@
+// components/Home.js - UPDATED with proper Add to Cart
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useGetProductsQuery } from '../store/api/productApi';
+import { useAddToCartMutation } from '../store/api/cartApi';
 import { selectIsAuthenticated, selectCurrentUser } from '../store/slices/authSlice';
-import { selectTotalItems, addToCart } from '../store/slices/cartSlice';
-import ProductCard from './ProductCard';
 import cart from '../assets/cart.png';
 
 const Home = () => {
   const dispatch = useDispatch();
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user = useSelector(selectCurrentUser);
-  const totalCartItems = useSelector(selectTotalItems);
   const navigate = useNavigate();
   
   const { data: productsResponse, error, isLoading } = useGetProductsQuery();
+  const [addToCart, { isLoading: isAddingToCart }] = useAddToCartMutation();
 
   // Extract products array from response
   const products = Array.isArray(productsResponse) 
@@ -35,12 +35,10 @@ const Home = () => {
     const stars = [];
     const fullStars = Math.floor(rating);
     
-    // Full stars
     for (let i = 0; i < fullStars; i++) {
       stars.push(<span key={`full-${i}`} style={{ color: '#FFD700' }}>★</span>);
     }
     
-    // Empty stars
     const emptyStars = 5 - stars.length;
     for (let i = 0; i < emptyStars; i++) {
       stars.push(<span key={`empty-${i}`} style={{ color: '#E0E0E0' }}>★</span>);
@@ -50,52 +48,50 @@ const Home = () => {
   };
 
   // Handle Add to Cart
-  const handleAddToCart = (product, e) => {
+  const handleAddToCart = async (product, e) => {
     e.stopPropagation();
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
+    
+    try {
+      await addToCart({
+        productId: product.id,
+        quantity: 1
+      }).unwrap();
+      
+      // Show success message
+      console.log('Added to cart:', product.name);
+      
+      // You can add a toast notification here
+      alert(`${product.name} added to cart!`);
+      
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
+      alert('Failed to add item to cart. Please try again.');
     }
-    
-    const cartItem = {
-      id: product.id,
-      name: product.name,
-      price: product.offerPrice || product.originalPrice,
-      originalPrice: product.originalPrice,
-      image: product.images?.[0] || '',
-      quantity: 1,
-      stock: product.stock
-    };
-    
-    dispatch(addToCart(cartItem));
-    
-    // Show success feedback (you can add a toast notification here)
-    console.log('Added to cart:', product.name);
   };
 
   // Handle Buy Now
-  const handleBuyNow = (product, e) => {
+  const handleBuyNow = async (product, e) => {
     e.stopPropagation();
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
+    
+    try {
+      // Add to cart first
+      await addToCart({
+        productId: product.id,
+        quantity: 1
+      }).unwrap();
+      
+      // Navigate to checkout
+      navigate('/checkout');
+      
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
+      alert('Failed to add item to cart. Please try again.');
     }
-    
-    // Add to cart first
-    const cartItem = {
-      id: product.id,
-      name: product.name,
-      price: product.offerPrice || product.originalPrice,
-      originalPrice: product.originalPrice,
-      image: product.images?.[0] || '',
-      quantity: 1,
-      stock: product.stock
-    };
-    
-    dispatch(addToCart(cartItem));
-    
-    // Navigate to checkout
-    navigate('/checkout');
+  };
+
+  // Handle Product Click
+  const handleProductClick = (productId) => {
+    navigate(`/product/${productId}`);
   };
 
   return (
@@ -137,47 +133,29 @@ const Home = () => {
               </div>
               
               <div className="d-flex flex-wrap gap-3 mb-4">
-                {!isAuthenticated ? (
-                  <>
-                    <button 
-                      className="btn btn-lg px-4 py-3 fw-semibold"
-                      style={{
-                        background: colors.secondary,
-                        color: colors.white,
-                        border: 'none',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 15px rgba(115, 188, 62, 0.3)'
-                      }}
-                      onClick={() => navigate('/login')}
-                    >
-                      🛍️ Start Shopping Now
-                    </button>
-                    <button 
-                      className="btn btn-outline-light btn-lg px-4 py-3 fw-semibold"
-                      style={{
-                        borderRadius: '12px',
-                        border: '2px solid rgba(255,255,255,0.3)'
-                      }}
-                      onClick={() => navigate('/products')}
-                    >
-                      Browse Products
-                    </button>
-                  </>
-                ) : (
-                  <button 
-                    className="btn btn-lg px-4 py-3 fw-semibold"
-                    style={{
-                      background: colors.secondary,
-                      color: colors.white,
-                      border: 'none',
-                      borderRadius: '12px',
-                      boxShadow: '0 4px 15px rgba(115, 188, 62, 0.3)'
-                    }}
-                    onClick={() => navigate('/products')}
-                  >
-                    Continue Shopping
-                  </button>
-                )}
+                <button 
+                  className="btn btn-lg px-4 py-3 fw-semibold"
+                  style={{
+                    background: colors.secondary,
+                    color: colors.white,
+                    border: 'none',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 15px rgba(115, 188, 62, 0.3)'
+                  }}
+                  onClick={() => navigate('/products')}
+                >
+                  🛍️ Start Shopping Now
+                </button>
+                <button 
+                  className="btn btn-outline-light btn-lg px-4 py-3 fw-semibold"
+                  style={{
+                    borderRadius: '12px',
+                    border: '2px solid rgba(255,255,255,0.3)'
+                  }}
+                  onClick={() => navigate('/products')}
+                >
+                  Browse Products
+                </button>
               </div>
 
               {/* Stats */}
@@ -387,7 +365,7 @@ const Home = () => {
                 Handpicked selection of our most popular items
               </p>
             </div>
-            {isAuthenticated && products.length > 0 && (
+            {products.length > 0 && (
               <div className="col-md-4 text-md-end">
                 <button 
                   className="btn px-4 py-2 fw-semibold"
@@ -472,6 +450,7 @@ const Home = () => {
                         e.currentTarget.style.transform = 'translateY(0)';
                         e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
                       }}
+                      onClick={() => handleProductClick(product.id)}
                     >
                       {/* Product Image */}
                       <div 
@@ -484,7 +463,6 @@ const Home = () => {
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
-                        onClick={() => navigate(`/product/${product.id}`)}
                       >
                         {product.images && product.images.length > 0 ? (
                           <img 
@@ -609,7 +587,7 @@ const Home = () => {
                               opacity: product.stock > 0 ? 1 : 0.6
                             }}
                             onClick={(e) => handleAddToCart(product, e)}
-                            disabled={product.stock <= 0}
+                            disabled={product.stock <= 0 || isAddingToCart}
                             onMouseEnter={(e) => {
                               if (product.stock > 0) {
                                 e.target.style.background = '#1a237e';
@@ -623,8 +601,17 @@ const Home = () => {
                               }
                             }}
                           >
-                            <i className="bi bi-cart-plus me-1"></i>
-                            Add to Cart
+                            {isAddingToCart ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                Adding...
+                              </>
+                            ) : (
+                              <>
+                                <i className="bi bi-cart-plus me-1"></i>
+                                Add to Cart
+                              </>
+                            )}
                           </button>
                           
                           <button 
@@ -665,7 +652,7 @@ const Home = () => {
                 ))}
               </div>
               
-              {products.length > 6 && isAuthenticated && (
+              {products.length > 6 && (
                 <div className="text-center mt-5">
                   <button 
                     className="btn px-5 py-3 fw-semibold"

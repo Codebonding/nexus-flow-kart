@@ -30,6 +30,13 @@ export const authApi = createApi({
         body: otpData,
       }),
     }),
+    resendOtp: builder.mutation({
+      query: (emailData) => ({
+        url: 'resend-otp',
+        method: 'POST',
+        body: emailData,
+      }),
+    }),
 
     // Login OTP Flow
     sendLoginOtp: builder.mutation({
@@ -94,6 +101,7 @@ export const authApi = createApi({
 export const { 
   useRegisterMutation, 
   useVerifyOtpMutation, 
+  useResendOtpMutation, // Add this
   useLoginMutation,
   useSendLoginOtpMutation,
   useVerifyLoginOtpMutation,
